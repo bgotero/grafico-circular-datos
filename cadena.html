@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cadena circular de valor (IA/Datos) – Interactiva</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #131a22;
+      --text: #e8eef6;
+      --muted: #a6b3c2;
+      --accent-1: #56b6c2; /* Datos */
+      --accent-2: #98c379; /* Modelos */
+      --accent-3: #e5c07b; /* Integración */
+      --accent-4: #c678dd; /* Despliegue */
+      --accent-5: #61afef; /* Retroalimentación */
+      --accent-6: #ef596f; /* Nuevos datos */
+      --ring: rgba(255,255,255,0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 24px; background: var(--bg); color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      max-width: 1100px; margin: 0 auto; display: grid; gap: 16px;
+    }
+    .card {
+      background: var(--card); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+      padding: 18px 18px 8px; border: 1px solid var(--ring);
+    }
+    .header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .title { font-size: clamp(18px, 2vw, 22px); font-weight: 700; letter-spacing: .3px; }
+    .subtitle { color: var(--muted); font-size: 14px; }
+    .viz {
+      width: 100%; aspect-ratio: 16/9; display: grid; place-items: center; position: relative;
+    }
+    svg { width: 100%; height: 100%; overflow: visible; }
+
+    .arc { cursor: pointer; transition: transform .2s ease-out, filter .2s; }
+    .arc:hover { filter: brightness(1.1) saturate(1.1); }
+
+    .label { font-size: clamp(11px, 1.2vw, 13px); fill: var(--text); pointer-events: none; font-weight: 600; }
+    .midline { stroke: rgba(255,255,255,.12); stroke-width: 1; }
+
+    .center-title { font-size: clamp(16px, 2.2vw, 22px); font-weight: 800; text-anchor: middle; fill: var(--text); }
+    .center-sub { font-size: clamp(11px, 1.2vw, 12.5px); text-anchor: middle; fill: var(--muted); }
+
+    .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 8px; }
+    .leg-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--ring); border-radius: 12px; background: rgba(255,255,255,0.02); }
+    .swatch { inline-size: 14px; block-size: 14px; border-radius: 50%; }
+    .leg-title { font-weight: 700; font-size: 13px; }
+    .leg-desc { color: var(--muted); font-size: 12px; line-height: 1.35; }
+
+    .tooltip {
+      position: absolute; pointer-events: none; background: #0e141b; color: var(--text);
+      border: 1px solid var(--ring); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.35;
+      filter: drop-shadow(0 8px 20px rgba(0,0,0,.35));
+      max-width: min(340px, 70vw); opacity: 0; transform: translateY(6px); transition: opacity .12s ease, transform .12s ease;
+      z-index: 10;
+    }
+    .tooltip.show { opacity: 1; transform: translateY(0); }
+    .tooltip h4 { margin: 0 0 6px; font-size: 14px; }
+    .tooltip p { margin: 0; color: var(--muted); }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .btn { background: rgba(255,255,255,.06); color: var(--text); border: 1px solid var(--ring); border-radius: 10px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+    .btn:hover { background: rgba(255,255,255,.09); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="header">
+        <div>
+          <div class="title">Cadena circular de valor — IA / Datos</div>
+          <div class="subtitle">Datos → Modelos → Integración → Despliegue → Retroalimentación → Nuevos datos (ciclo continuo)</div>
+        </div>
+        <div class="controls">
+          <button class="btn" id="animate">Reproducir animación</button>
+          <button class="btn" id="reset">Reset</button>
+        </div>
+      </div>
+
+      <div class="viz" id="viz">
+        <svg id="svg" role="img" aria-labelledby="chartTitle chartDesc">
+          <title id="chartTitle">Cadena circular de valor (interactiva)</title>
+          <desc id="chartDesc">Seis segmentos en anillo que representan las fases: Datos, Modelos, Integración, Despliegue, Retroalimentación y Nuevos datos. Interacción por hover y click para mostrar descripciones.</desc>
+          <!-- Grupos dinámicos se insertan con JS -->
+        </svg>
+        <div class="tooltip" id="tooltip" aria-hidden="true"></div>
+      </div>
+
+      <div class="legend" id="legend"></div>
+    </div>
+  </div>
+
+  <script>
+    // ======= Configuración =======
+    const steps = [
+      {
+        key: 'datos',
+        title: 'Datos',
+        color: getComputedStyle(document.documentElement).getPropertyValue('--accent-1').trim(),
+        desc: 'Captura y gobierno de datos: calidad, fuentes, permisos, linaje y seguridad.',
+      },
+      {
+        key: 'modelos',
+        title: 'Modelos',
+        color: getComputedStyle(document.documentElement).getPropertyValue('--accent-2').trim(),
+        desc: 'Entrenamiento, validación y selección de modelos; evaluación y MLOps.',
+      },
+      {
+        key: 'integracion',
+        title: 'Integración',
+        color: getComputedStyle(document.documentElement).getPropertyValue('--accent-3').trim(),
+        desc: 'APIs, pipelines y orquestación para conectar el modelo con sistemas existentes.',
+      },
+      {
+        key: 'despliegue',
+        title: 'Despliegue',
+        color: getComputedStyle(document.documentElement).getPropertyValue('--accent-4').trim(),
+        desc: 'Ejecución en producción: escalado, latencia, coste, observabilidad y seguridad.',
+      },
+      {
+        key: 'retro',
+        title: 'Retroalimentación',
+        color: getComputedStyle(document.documentElement).getPropertyValue('--accent-5').trim(),
+        desc: 'Monitoreo de rendimiento, métricas online, errores, sesgos y feedback del usuario.',
+      },
+      {
+        key: 'nuevos',
+        title: 'Nuevos datos',
+        color: getComputedStyle(document.documentElement).getPropertyValue('--accent-6').trim(),
+        desc: 'Datos generados por el uso se incorporan al lago de datos para nuevas iteraciones.',
+      },
+    ];
+
+    const svg = document.getElementById('svg');
+    const tooltip = document.getElementById('tooltip');
+    const legend = document.getElementById('legend');
+
+    // Layout responsivo
+    const vb = { w: 1100, h: 700 };
+    svg.setAttribute('viewBox', `0 0 ${vb.w} ${vb.h}`);
+
+    const cx = vb.w / 2;
+    const cy = vb.h / 2 + 10;
+    const outerR = Math.min(vb.w, vb.h) * 0.36; // radio externo
+    const innerR = outerR * 0.60;               // radio interno (donut)
+
+    // ======= Utilidades geométricas =======
+    const TAU = Math.PI * 2;
+
+    function polarToCartesian(cx, cy, r, angle) {
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    }
+
+    function arcPath(cx, cy, r1, r2, a0, a1) {
+      // arco donut entre ángulos a0..a1 (r1 inner, r2 outer)
+      const p0 = polarToCartesian(cx, cy, r2, a0);
+      const p1 = polarToCartesian(cx, cy, r2, a1);
+      const p2 = polarToCartesian(cx, cy, r1, a1);
+      const p3 = polarToCartesian(cx, cy, r1, a0);
+      const large = (a1 - a0) % TAU > Math.PI ? 1 : 0;
+      return [
+        `M ${p0.x} ${p0.y}`,
+        `A ${r2} ${r2} 0 ${large} 1 ${p1.x} ${p1.y}`,
+        `L ${p2.x} ${p2.y}`,
+        `A ${r1} ${r1} 0 ${large} 0 ${p3.x} ${p3.y}`,
+        'Z',
+      ].join(' ');
+    }
+
+    function midAngle(a0, a1) { return a0 + (a1 - a0) / 2; }
+
+    // ======= Construcción del gráfico =======
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    svg.appendChild(g);
+
+    // Líneas guía (opcionales) — 6 divisiones
+    for (let i = 0; i < steps.length; i++) {
+      const a = (i / steps.length) * TAU - Math.PI / 2;
+      const pInner = polarToCartesian(cx, cy, innerR, a);
+      const pOuter = polarToCartesian(cx, cy, outerR, a);
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', pInner.x);
+      line.setAttribute('y1', pInner.y);
+      line.setAttribute('x2', pOuter.x);
+      line.setAttribute('y2', pOuter.y);
+      line.setAttribute('class', 'midline');
+      line.setAttribute('opacity', '0.4');
+      g.appendChild(line);
+    }
+
+    // Segmentos
+    const arcGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.appendChild(arcGroup);
+
+    const labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.appendChild(labelGroup);
+
+    const n = steps.length;
+    const pad = 0.02; // padding angular entre segmentos (radianes)
+
+    steps.forEach((step, i) => {
+      const a0 = (i / n) * TAU - Math.PI / 2 + pad/2;
+      const a1 = ((i + 1) / n) * TAU - Math.PI / 2 - pad/2;
+
+      // Arco
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', arcPath(cx, cy, innerR, outerR, a0, a1));
+      path.setAttribute('fill', step.color);
+      path.setAttribute('class', 'arc');
+      path.dataset.index = i;
+      path.style.filter = 'drop-shadow(0 2px 10px rgba(0,0,0,.25))';
+
+      // Accesibilidad
+      path.setAttribute('role', 'img');
+      path.setAttribute('aria-label', `${step.title}. ${step.desc}`);
+
+      arcGroup.appendChild(path);
+
+      // Etiquetas — colocadas radialmente fuera del arco
+      const aMid = midAngle(a0, a1);
+      const labelR = outerR + 26; // radio para etiquetas
+      const lp = polarToCartesian(cx, cy, labelR, aMid);
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', lp.x);
+      text.setAttribute('y', lp.y);
+      text.setAttribute('class', 'label');
+      text.setAttribute('text-anchor', Math.cos(aMid) >= 0 ? 'start' : 'end');
+      text.setAttribute('alignment-baseline', 'middle');
+      text.textContent = step.title;
+      labelGroup.appendChild(text);
+
+      // Interacción
+      path.addEventListener('mousemove', (ev) => showTip(ev, step));
+      path.addEventListener('mouseleave', hideTip);
+      path.addEventListener('click', () => focusSegment(i));
+    });
+
+    // Título central
+    const centerTitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    centerTitle.setAttribute('x', cx);
+    centerTitle.setAttribute('y', cy - 4);
+    centerTitle.setAttribute('class', 'center-title');
+    centerTitle.textContent = 'Ciclo de valor';
+    g.appendChild(centerTitle);
+
+    const centerSub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    centerSub.setAttribute('x', cx);
+    centerSub.setAttribute('y', cy + 20);
+    centerSub.setAttribute('class', 'center-sub');
+    centerSub.textContent = 'IA / Datos';
+    g.appendChild(centerSub);
+
+    // Leyenda
+    steps.forEach((s) => {
+      const item = document.createElement('div');
+      item.className = 'leg-item';
+      const sw = document.createElement('div');
+      sw.className = 'swatch';
+      sw.style.background = s.color;
+      const block = document.createElement('div');
+      const t = document.createElement('div');
+      t.className = 'leg-title';
+      t.textContent = s.title;
+      const d = document.createElement('div');
+      d.className = 'leg-desc';
+      d.textContent = s.desc;
+      block.appendChild(t); block.appendChild(d);
+      item.appendChild(sw); item.appendChild(block);
+      legend.appendChild(item);
+    });
+
+    // ======= Tooltip =======
+    function showTip(ev, step) {
+      tooltip.innerHTML = `<h4>${step.title}</h4><p>${step.desc}</p>`;
+      tooltip.classList.add('show');
+      tooltip.setAttribute('aria-hidden', 'false');
+      const bb = tooltip.getBoundingClientRect();
+      const parentBB = document.getElementById('viz').getBoundingClientRect();
+      let x = ev.clientX - parentBB.left + 12;
+      let y = ev.clientY - parentBB.top + 12;
+      // Evitar que se salga por la derecha/abajo
+      if (x + bb.width > parentBB.width - 8) x = parentBB.width - bb.width - 8;
+      if (y + bb.height > parentBB.height - 8) y = parentBB.height - bb.height - 8;
+      tooltip.style.left = x + 'px';
+      tooltip.style.top = y + 'px';
+    }
+    function hideTip() {
+      tooltip.classList.remove('show');
+      tooltip.setAttribute('aria-hidden', 'true');
+    }
+
+    // ======= Focus / Animación =======
+    function focusSegment(index) {
+      const paths = svg.querySelectorAll('.arc');
+      paths.forEach((p, i) => {
+        const scale = i == index ? 1.04 : 1.0;
+        p.style.transformOrigin = 'center';
+        p.style.transform = `scale(${scale})`;
+        p.style.opacity = i == index ? 1 : 0.55;
+      });
+    }
+
+    function resetFocus() {
+      const paths = svg.querySelectorAll('.arc');
+      paths.forEach((p) => {
+        p.style.transform = 'scale(1)';
+        p.style.opacity = 1;
+      });
+      hideTip();
+    }
+
+    document.getElementById('reset').addEventListener('click', resetFocus);
+
+    // animación de barrido inicial
+    function playAnimation() {
+      // Simple: resalta cada segmento en secuencia
+      const paths = Array.from(svg.querySelectorAll('.arc'));
+      let i = 0;
+      resetFocus();
+      const id = setInterval(() => {
+        focusSegment(i % paths.length);
+        i++;
+        if (i > paths.length) {
+          clearInterval(id);
+          setTimeout(resetFocus, 700);
+        }
+      }, 500);
+    }
+
+    document.getElementById('animate').addEventListener('click', playAnimation);
+
+    // ======= Adaptación: colores / textos =======
+    // Puedes cambiar colores desde CSS variables (en :root) o editar el array steps arriba.
+    // Para traducir a EN rápidamente, sustituye titles/desc y la cabecera.
+  </script>
+</body>
+</html>
